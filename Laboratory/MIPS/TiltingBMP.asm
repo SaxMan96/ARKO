@@ -1,7 +1,4 @@
-		
-# changes fileError - zmieniony label		 fileExc
-			
-		.data
+.data
 		
 header:		.space 56
 buff:		.space 4 #  zobaczymy
@@ -10,11 +7,11 @@ size:		.space 4 # rozmiar pliku wejsciowego
 width:		.space 4 # niepotrz
 height:		.space 4 # niepotrz
 poczatek:	.space 4
+pomocniczy:	.space 4
 
 
-
-startMsg:	.asciiz "Przechylanie Obrazka BMP\nMateusz Dorobek"
-readMsg:	.asciiz "Wczytano Obraz: "
+startMsg:	.asciiz "Przechylanie Obrazka BMP w Architekturze MIPS\n   Mateusz Dorobek WEiTI PW Informatyka 2017.04\n"
+readMsg:	.asciiz "Wczytano Obraz\n   Przetwarzanie...\n"
 errorMsg:	.asciiz "Blad wczytywanie pliku (zwiazany z plikiem)\n"
 fileNameIn:	.asciiz "fileIn.bmp"
 fileNameOut:	.asciiz "fileOut.bmp"
@@ -110,8 +107,8 @@ tilt:
 	# $t0 - wska¿nik na wiersz pomocniczy
 	# $t1 - wskaŸnik po kolejnych elementach
 	# $t2 - wskaŸnik po wierszach
-	# $t3 - licznik po bajtach w wierszu
-	# $t4 - liczba bajtów w wierszu
+	# $t3 - liczba bajtów w wierszu
+	# $t4 - licznik po bajtach w wierszu
 	# $t5 - padding
 	# $t6 - licznik po kolejnych wierszach (height)
 	# $s0 - rozmiar pliku
@@ -131,13 +128,14 @@ tilt:
 	mfhi $t5		# przekopiowanie hi do t5
 	
 	# Alokacja pamieci o rozmiarze szerkowosci wiersza:
-	mul $t6, $s3, 10		
-	add $t6, $t6, $t5 	# szerokosc wiersza w bajtach + padding
+	mul $t6, $s2, 3		
 	move $a0, $t6		# rozmiar wiersza pomocniczego
 	li $v0, 9
 	syscall
 	# Adres zaalokowanej pamieci na wiersz pomocniczy
 	move $t0, $v0
+	sw $t0, pomocniczy
+	
 	lw   $t1, poczatek
 	lw   $t2, poczatek
 	lw   $t3, width
@@ -147,7 +145,9 @@ tilt:
 	li   $s6, 0
 	# Zapisanie pierwszego wiersza bitmapy do wiersza pomocniczego
 loopForEachRow:
-loopForRow:
+	move $t4, $t3
+	lw $t0, pomocniczy
+	move $t1, $t2
 copyToTempRow:
 	# Zapisuje ca³y wiersz bez paddingu do wiersza pomocniczego
 	# t1 --> t0
@@ -157,15 +157,14 @@ copyToTempRow:
 	addi $t1, $t1, 1
 	addi $t4, $t4, -1
 	bnez $t4, copyToTempRow
-	# Ponowne ustawienie licznika na dlugosc wiersza
-	move $t4, $t3
+
 	# Ustawienie wskaznikow na poczatek wierz
-	move $t0, $t2
+	lw $t0, pomocniczy
 	move $t1, $t2
 ###############################################################################
 	# Przesuniecie wskaznika na wiersz pomocniczy o odpowiednia wartosc
 	mul $t4, $s6, 3		# Wskazanie na poczatek pikseli do przepisania
-	add $t0, $t0, $s4	
+	add $t0, $t0, $t4	
 	move $s7, $t3		# liczba bajtow w wierszu (bez paddingu)
 shiftingRow:
 	# t0 --> t1
@@ -179,17 +178,26 @@ shiftingRow:
 	# Jezeli dotrzemy do konca wiersza bez paddingu to przepisujemy jego poczatek
 	bne $t4, $t3, shiftingRow
 	# Ustawiam wskaznik na poczatek wiersza
-	move $t0, $t2
+	#move $t0, $t2
+	lw $t0, pomocniczy##########
+	li $t4, 0	
 	b shiftingRow	
 nextRow:	
-					
 	# Przesuniecie do kolejnego wiersza
 	# Przesuniecie wskaznikow
-	move $s7, $t3
-	add $t2, $t2, $s7	# Liczba bajtów
+	add $t2, $t2, $t3	# Liczba bajtów
 	add $t2, $t2, $t5	# Padding
 	# Mamy wskaznik na kolejny wiersz
 	addi $s6, $s6, 1
+	mul $s7, $s6, 3
+	beq $s7, $t3, ZerujPrzesuniecie
+	b NieZerujPrzesuniecia
+ZerujPrzesuniecie:
+	li $s6, 0
+	addi $t6, $t6, -1
+	beqz $t6, saveFile
+	b loopForEachRow
+NieZerujPrzesuniecia:
 	addi $t6, $t6, -1
 	beqz $t6, saveFile
 	b loopForEachRow
@@ -236,7 +244,3 @@ exit:
 	# zamkniecie programu:
 	li $v0, 10
 	syscall
-	
-	
-	
-	
