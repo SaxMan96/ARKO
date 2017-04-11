@@ -1,19 +1,22 @@
 .data
 		
 header:		.space 56
-buff:		.space 4 #  zobaczymy
 offset:		.space 4
 size:		.space 4 # rozmiar pliku wejsciowego
-width:		.space 4 # niepotrz
-height:		.space 4 # niepotrz
+width:		.space 4 
+height:		.space 4 
 poczatek:	.space 4
 pomocniczy:	.space 4
 
 
 startMsg:	.asciiz "Przechylanie Obrazka BMP w Architekturze MIPS\n   Mateusz Dorobek WEiTI PW Informatyka 2017.04\n"
 readMsg:	.asciiz "Wczytano Obraz\n   Przetwarzanie...\n"
+chooseMsg:	.asciiz "Wybierz plik: 1, 2, 3\n"
+chooseErrorMsg:	.asciiz "Zly wybor pliku.\n"
 errorMsg:	.asciiz "Blad wczytywanie pliku (zwiazany z plikiem)\n"
-fileNameIn:	.asciiz "fileIn.bmp"
+fileNameIn1:	.asciiz "fileIn1.bmp"
+fileNameIn2:	.asciiz "fileIn2.bmp"
+fileNameIn3:	.asciiz "fileIn3.bmp"
 fileNameOut:	.asciiz "fileOut.bmp"
 
 		.text
@@ -37,14 +40,43 @@ readFile:
 	# $s2 - szerokosc
 	# $s3 - wysokosc
 	# --------------------------------------------------------------------------
+	# Wybierz plik
+	la $a0, chooseMsg
+	li $v0, 4
+	syscall
+	# Czytam wybor
+	li $v0, 5
+	syscall
+	move $t2, $v0
+	beq $t2, 1, fileIn1
+	beq $t2, 2, fileIn2
+	beq $t2, 3, fileIn3
+	b chooseError
 	
-	# otwieranie pliku 'fileIn.bmp':
-	la $a0, fileNameIn	# file name
+fileIn1:
+	# otwieranie pliku 'fileIn1.bmp':
+	la $a0, fileNameIn1	# file name
 	li $a1, 0		# flags 0 = read-only, 1 = write-only with create, 9 - and append
 	li $a2, 0		# mode
 	li $v0, 13		# open file
 	syscall
-	
+	b descriptor
+fileIn2:
+	# otwieranie pliku 'fileIn2.bmp':
+	la $a0, fileNameIn2	# file name
+	li $a1, 0		# flags 0 = read-only, 1 = write-only with create, 9 - and append
+	li $a2, 0		# mode
+	li $v0, 13		# open file
+	syscall
+	b descriptor
+fileIn3:
+	# otwieranie pliku 'fileIn3.bmp':
+	la $a0, fileNameIn3	# file name
+	li $a1, 0		# flags 0 = read-only, 1 = write-only with create, 9 - and append
+	li $a2, 0		# mode
+	li $v0, 13		# open file
+	syscall
+descriptor:
 	move $t1, $v0 		# deskryptor pliku do $t1 ujemny w przypadku bledu
 	bltz $t1, fileError	# jesli blad skaczemy do fileError
 	
@@ -55,7 +87,7 @@ readFile:
 	
 	# ---------------------  Wczytywanie naglowka pliku  -----------------------
 	
-	# wczytanie NAGLOWKA:
+	# wczytanie calego NAGLOWKA:
   	move $a0, $t1     
 	la   $a1, header+2   	  # lw laduje tylko slowa o adreasie podzielnym przez 4
   	li   $a2, 54
@@ -139,7 +171,7 @@ tilt:
 	lw   $t1, poczatek
 	lw   $t2, poczatek
 	lw   $t3, width
-		mul $t3, $t3, 3		#liczba pikseli w wierszu x3 (RGB)
+	mul $t3, $t3, 3		#liczba pikseli w wierszu x3 (RGB) zeby poruszac sie po bajtach
 	move $t4, $t3
 	lw   $t6, height
 	li   $s6, 0
@@ -158,11 +190,10 @@ copyToTempRow:
 	addi $t4, $t4, -1
 	bnez $t4, copyToTempRow
 
-	# Ustawienie wskaznikow na poczatek wierz
+# Ustawienie wskaznikow na poczatek wierza
 	lw $t0, pomocniczy
 	move $t1, $t2
-###############################################################################
-	# Przesuniecie wskaznika na wiersz pomocniczy o odpowiednia wartosc
+# Przesuniecie wskaznika na wiersz pomocniczy o odpowiednia wartosc
 	mul $t4, $s6, 3		# Wskazanie na poczatek pikseli do przepisania
 	add $t0, $t0, $t4	
 	move $s7, $t3		# liczba bajtow w wierszu (bez paddingu)
@@ -175,23 +206,21 @@ shiftingRow:
 	addi $s7, $s7, -1
 	beqz $s7, nextRow	# Jak juz przerobi wszystkie piksele to nastepny wiersz
 	addi $t4, $t4, 1
-	# Jezeli dotrzemy do konca wiersza bez paddingu to przepisujemy jego poczatek
+	# Jezeli dotrzemy do konca wiersza pikseli bez paddingu to przepisujemy jego poczatek
 	bne $t4, $t3, shiftingRow
 	# Ustawiam wskaznik na poczatek wiersza
-	#move $t0, $t2
-	lw $t0, pomocniczy##########
+	lw $t0, pomocniczy
 	li $t4, 0	
 	b shiftingRow	
 nextRow:	
 	# Przesuniecie do kolejnego wiersza
-	# Przesuniecie wskaznikow
 	add $t2, $t2, $t3	# Liczba bajtów
 	add $t2, $t2, $t5	# Padding
 	# Mamy wskaznik na kolejny wiersz
 	addi $s6, $s6, 1
 	mul $s7, $s6, 3
-	beq $s7, $t3, ZerujPrzesuniecie
-	b NieZerujPrzesuniecia
+	# Jezeli obazek wyzszy niz szerszy to wracam z przesunieciem na poczatek wiersza
+	bne $s7, $t3, NieZerujPrzesuniecia
 ZerujPrzesuniecie:
 	li $s6, 0
 	addi $t6, $t6, -1
@@ -204,7 +233,7 @@ NieZerujPrzesuniecia:
 
 saveFile:
 	# zapisujemy wynik pracy w pliku "out.bmp"
-	la $a0, fileNameOut	# file that doesn't exist
+	la $a0, fileNameOut
 	li $a1, 1		# falga 1 = write-only with create
 	li $a2, 0		
 	li $v0, 13
@@ -215,7 +244,7 @@ saveFile:
 	
 	bltz $t0, fileError	# jesli bald to skok do fileError label
 	lw $s0, size		# ladowanie rejestrow
-	lw $s1, poczatek	#######################
+	lw $s1, poczatek	
 	
 	# Zapis NAGLOWKA
 	move $a0, $t0		
@@ -235,6 +264,11 @@ saveFile:
 	li $v0, 16		# zamykanie pliku
 	syscall
 	
+	b exit
+chooseError:
+	la $a0, chooseErrorMsg 	# komunikat o bledzie
+	li $v0, 4
+	syscall
 	b exit
 fileError:
 	la $a0, errorMsg 	# komunikat o bledzie
